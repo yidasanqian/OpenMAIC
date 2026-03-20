@@ -38,6 +38,9 @@ export interface GenerateClassroomInput {
   enableWebSearch?: boolean;
   enableImageGeneration?: boolean;
   enableVideoGeneration?: boolean;
+  enableQuiz?: boolean;
+  enableInteractive?: boolean;
+  enablePBL?: boolean;
   enableTTS?: boolean;
   agentMode?: 'default' | 'generate';
 }
@@ -184,7 +187,7 @@ export async function generateClassroom(
   if (!apiKey) {
     throw new Error(
       `No API key configured for provider "${providerId}". ` +
-        `Set the appropriate key in .env.local or server-providers.yml (e.g. ${providerId.toUpperCase()}_API_KEY).`,
+      `Set the appropriate key in .env.local or server-providers.yml (e.g. ${providerId.toUpperCase()}_API_KEY).`,
     );
   }
 
@@ -207,6 +210,9 @@ export async function generateClassroom(
   const requirements: UserRequirements = {
     requirement,
     language: lang,
+    enableQuiz: input.enableQuiz ?? false,
+    enableInteractive: input.enableInteractive ?? false,
+    enablePBL: input.enablePBL ?? false,
   };
   const pdfText = pdfContent?.text || undefined;
 

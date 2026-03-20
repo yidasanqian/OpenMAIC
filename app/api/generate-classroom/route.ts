@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
       ...(rawBody.enableVideoGeneration != null
         ? { enableVideoGeneration: rawBody.enableVideoGeneration }
         : {}),
+      ...(rawBody.enableQuiz != null ? { enableQuiz: rawBody.enableQuiz } : {}),
+      ...(rawBody.enableInteractive != null
+        ? { enableInteractive: rawBody.enableInteractive }
+        : {}),
+      ...(rawBody.enablePBL != null ? { enablePBL: rawBody.enablePBL } : {}),
       ...(rawBody.enableTTS != null ? { enableTTS: rawBody.enableTTS } : {}),
       ...(rawBody.agentMode ? { agentMode: rawBody.agentMode } : {}),
     };

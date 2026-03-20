@@ -19,6 +19,89 @@ import type { AICallFn, GenerationResult, GenerationCallbacks } from './pipeline
 import { createLogger } from '@/lib/logger';
 const log = createLogger('Generation');
 
+function downgradeOutlineToSlide(outline: SceneOutline): SceneOutline {
+  const { quizConfig, interactiveConfig, pblConfig, ...rest } = outline;
+  void quizConfig;
+  void interactiveConfig;
+  void pblConfig;
+
+  return {
+    ...rest,
+    type: 'slide',
+  };
+}
+
+export function buildSceneTypePolicy(requirements: UserRequirements): string {
+  const allowedTypes = ['"slide"'];
+  const disabledTypes: string[] = [];
+
+  if (requirements.enableQuiz) {
+    allowedTypes.push('"quiz"');
+  } else {
+    disabledTypes.push('"quiz"');
+  }
+
+  if (requirements.enableInteractive) {
+    allowedTypes.push('"interactive"');
+  } else {
+    disabledTypes.push('"interactive"');
+  }
+
+  if (requirements.enablePBL) {
+    allowedTypes.push('"pbl"');
+  } else {
+    disabledTypes.push('"pbl"');
+  }
+
+  if (disabledTypes.length === 0) {
+    return '';
+  }
+
+  const policyLines = [
+    '**Scene Type Policy (highest priority):**',
+    `- Allowed scene types for this request: ${allowedTypes.join(', ')}.`,
+    `- Do NOT output any scenes of type ${disabledTypes.join(', ')}.`,
+  ];
+
+  if (!requirements.enableQuiz) {
+    policyLines.push('- Replace quiz scenes with explanation or review slides.');
+  }
+  if (!requirements.enableInteractive) {
+    policyLines.push(
+      '- Replace interactive HTML simulations with normal slide scenes that explain the concept statically.',
+    );
+  }
+  if (!requirements.enablePBL) {
+    policyLines.push(
+      '- Replace project-based learning modules with regular instructional slide scenes.',
+    );
+  }
+
+  return policyLines.join('\n');
+}
+
+export function applySceneTypePolicyToOutline(
+  outline: SceneOutline,
+  requirements: UserRequirements,
+): SceneOutline {
+  if (outline.type === 'quiz' && !requirements.enableQuiz) {
+    log.info(`Quiz outline "${outline.title}" disabled by policy, falling back to slide`);
+    return downgradeOutlineToSlide(outline);
+  }
+
+  if (outline.type === 'interactive' && !requirements.enableInteractive) {
+    log.info(`Interactive outline "${outline.title}" disabled by policy, falling back to slide`);
+    return downgradeOutlineToSlide(outline);
+  }
+
+  if (outline.type === 'pbl' && !requirements.enablePBL) {
+    log.info(`PBL outline "${outline.title}" disabled by policy, falling back to slide`);
+    return downgradeOutlineToSlide(outline);
+  }
+
+  return outline;
+}
+
 /**
  * Generate scene outlines from user requirements
  * Now uses simplified UserRequirements with just requirement text and language
@@ -111,6 +194,7 @@ export async function generateSceneOutlinesFromRequirements(
       options?.researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
     // Server-side generation populates this via options; client-side populates via formatTeacherPersonaForPrompt
     teacherContext: options?.teacherContext || '',
+    sceneTypePolicy: buildSceneTypePolicy(requirements),
   });
 
   if (!prompts) {
@@ -137,12 +221,17 @@ export async function generateSceneOutlinesFromRequirements(
       };
     }
     // Ensure IDs, order, and language
-    const enriched = outlines.map((outline, index) => ({
-      ...outline,
-      id: outline.id || nanoid(),
-      order: index + 1,
-      language: requirements.language,
-    }));
+    const enriched = outlines.map((outline, index) =>
+      applySceneTypePolicyToOutline(
+        {
+          ...outline,
+          id: outline.id || nanoid(),
+          order: index + 1,
+          language: requirements.language,
+        },
+        requirements,
+      ),
+    );
 
     // Replace sequential gen_img_N/gen_vid_N with globally unique IDs
     const result = uniquifyMediaElementIds(enriched);

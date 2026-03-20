@@ -68,6 +68,9 @@ export interface UserRequirements {
   userNickname?: string; // Student nickname for personalization
   userBio?: string; // Student background for personalization
   webSearch?: boolean; // Enable web search for richer context
+  enableQuiz?: boolean; // Allow quiz scenes in auto-generated outlines
+  enableInteractive?: boolean; // Allow interactive HTML scenes in auto-generated outlines
+  enablePBL?: boolean; // Allow PBL scenes in auto-generated outlines
 }
 
 /**

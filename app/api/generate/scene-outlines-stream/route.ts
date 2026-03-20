@@ -13,6 +13,10 @@
 
 import { NextRequest } from 'next/server';
 import { streamLLM } from '@/lib/ai/llm';
+import {
+  applySceneTypePolicyToOutline,
+  buildSceneTypePolicy,
+} from '@/lib/generation/outline-generator';
 import { buildPrompt, PROMPT_IDS } from '@/lib/generation/prompts';
 import {
   formatImageDescription,
@@ -171,6 +175,7 @@ export async function POST(req: NextRequest) {
 
     // Build teacher context from agents (if available)
     const teacherContext = formatTeacherPersonaForPrompt(agents);
+    const sceneTypePolicy = buildSceneTypePolicy(requirements);
 
     const prompts = buildPrompt(PROMPT_IDS.REQUIREMENTS_TO_OUTLINES, {
       requirement: requirements.requirement,
@@ -184,6 +189,7 @@ export async function POST(req: NextRequest) {
       researchContext: researchContext || (requirements.language === 'zh-CN' ? '无' : 'None'),
       mediaGenerationPolicy,
       teacherContext,
+      sceneTypePolicy,
     });
 
     if (!prompts) {
@@ -225,22 +231,22 @@ export async function POST(req: NextRequest) {
 
           const streamParams = visionImages?.length
             ? {
-                model: languageModel,
-                system: prompts.system,
-                messages: [
-                  {
-                    role: 'user' as const,
-                    content: buildVisionUserContent(prompts.user, visionImages),
-                  },
-                ],
-                maxOutputTokens: modelInfo?.outputWindow,
-              }
+              model: languageModel,
+              system: prompts.system,
+              messages: [
+                {
+                  role: 'user' as const,
+                  content: buildVisionUserContent(prompts.user, visionImages),
+                },
+              ],
+              maxOutputTokens: modelInfo?.outputWindow,
+            }
             : {
-                model: languageModel,
-                system: prompts.system,
-                prompt: prompts.user,
-                maxOutputTokens: modelInfo?.outputWindow,
-              };
+              model: languageModel,
+              system: prompts.system,
+              prompt: prompts.user,
+              maxOutputTokens: modelInfo?.outputWindow,
+            };
 
           let parsedOutlines: SceneOutline[] = [];
           let lastError: string | undefined;
@@ -259,11 +265,14 @@ export async function POST(req: NextRequest) {
                 const newOutlines = extractNewOutlines(fullText, parsedOutlines.length);
                 for (const outline of newOutlines) {
                   // Ensure ID and order
-                  const enriched = {
-                    ...outline,
-                    id: outline.id || nanoid(),
-                    order: parsedOutlines.length + 1,
-                  };
+                  const enriched = applySceneTypePolicyToOutline(
+                    {
+                      ...outline,
+                      id: outline.id || nanoid(),
+                      order: parsedOutlines.length + 1,
+                    },
+                    requirements,
+                  );
                   parsedOutlines.push(enriched);
 
                   const event = JSON.stringify({
